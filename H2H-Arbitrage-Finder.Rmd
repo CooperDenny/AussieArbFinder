@@ -1,0 +1,210 @@
+---
+title: "H2H-Arbitrage-Finder"
+author: "Cooper Denny"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+Before we begin, lets load the required R packages for this analysis. 
+```{r}
+library(oddsapiR)
+library(tidyverse)
+library(stringr)
+library(DT)
+```
+
+In order to access the odds-api, go to https://the-odds-api.com/#get-access where you can access a unique API key
+
+```{r}
+#Sys.setenv(ODDS_API_KEY = "XXXX-YOUR-API-KEY-HERE-XXXX")
+Sys.setenv(ODDS_API_KEY = "7728a3f91022370dbe307b574b5374ef")
+```
+
+The following will tell you how many requests you have remaining as well as how many requests you have used so far this month. 
+
+```{r}
+toa_requests()
+```
+Lets check which sports currently have active markets (not including outright markets).
+
+```{r}
+active_sports <- toa_sports() %>% 
+  filter(active == TRUE, has_outrights == FALSE)
+
+datatable(active_sports, options = list(scrollX = TRUE))
+```
+
+Now we will extract H2H odds for all active markets in Australia
+
+```{r}
+# Create an initial dataframe where we will store all sports odds
+sports_odds <- data.frame()
+
+for(i in 1:nrow(active_sports)){
+
+sports_odds_i <- tryCatch({toa_sports_odds(
+    sport_key = active_sports$key[i],
+    regions = 'au',
+    markets = 'h2h',
+    odds_format = 'decimal',
+    date_format = 'iso')}, 
+    error = function(i) NA)
+
+if(length(sports_odds_i) > 1){
+sports_odds_i <- sports_odds_i %>% mutate(sport = active_sports$key[i])
+sports_odds <- bind_rows(sports_odds, sports_odds_i)
+}
+}
+
+sports_odds$commence_time <- as_datetime(sports_odds$commence_time)
+```
+
+```{r}
+datatable(sports_odds, options = list(scrollX = TRUE))
+```
+
+```{r}
+best_h2h_odds <- sports_odds %>% 
+  
+  #Filter out lay bets from Betfair
+  filter(market_key != "h2h_lay") %>%
+  
+  #Add commission variable, which is a % of the profit that Betfair will take from the winnings. 
+  #From what I've observed, Betfair takes 10% from NRL matches and 5% from all other sporting events
+  mutate(commission = ifelse(bookmaker == "Betfair", ifelse(sport == "rugbyleague_nrl", 10, 5), 0)) %>%
+  
+  #Add a converted odds variable which adjusts odds to their odds once commission is taken into account
+  mutate(converted_odds = ifelse(market_key == "h2h_lay", 
+                                 1 + (1-commission/100)/(outcomes_price-1), 
+                                 1 + (1-commission/100)*(outcomes_price-1))) %>%
+  
+  
+  #Only keep the best odds for each outcome of a unique match
+  group_by(id, outcomes_name, home_team, away_team, sport) %>%
+  filter(converted_odds == max(converted_odds)) %>% 
+  
+  #Make a note of the bookmakers that offer the best odds
+  #A lot of the time more than 1 bookmaker will offer the best possible odds you can find. I will note a maximum of 4. 
+  group_by(id, outcomes_name, home_team, away_team, converted_odds, sport, commence_time) %>%
+  summarise(
+    bookmaker1 = sort(bookmaker)[1],
+    bookmaker2 = sort(bookmaker)[2],
+    bookmaker3 = sort(bookmaker)[3],
+    bookmaker4 = sort(bookmaker)[4]
+  ) 
+
+#Clean up the names of the bookmakers so that it is just the first word of the bookmaker
+best_h2h_odds$bookmaker1 <- word(best_h2h_odds$bookmaker1, start = 1, end = 1)
+best_h2h_odds$bookmaker2 <- word(best_h2h_odds$bookmaker2, start = 1, end = 1)
+best_h2h_odds$bookmaker3 <- word(best_h2h_odds$bookmaker3, start = 1, end = 1)
+best_h2h_odds$bookmaker4 <- word(best_h2h_odds$bookmaker4, start = 1, end = 1)
+
+#Change NA entries to "" so that the bookmaker columns can be combined
+best_h2h_odds$bookmaker2[is.na(best_h2h_odds$bookmaker2)] <- ""
+best_h2h_odds$bookmaker3[is.na(best_h2h_odds$bookmaker3)] <- ""
+best_h2h_odds$bookmaker4[is.na(best_h2h_odds$bookmaker4)] <- ""
+
+#Combine all bookmaker columns into a single column
+best_h2h_odds$bookmakers <- paste(best_h2h_odds$bookmaker1, best_h2h_odds$bookmaker2, best_h2h_odds$bookmaker3, best_h2h_odds$bookmaker4)
+
+#Remove bookmaker1, bookmaker2, bookmaker3, bookmaker4 columns as they are now redundant
+best_h2h_odds <- subset(best_h2h_odds, select = -c(bookmaker1,bookmaker2,bookmaker3,bookmaker4))
+
+#Identify the market % of the best odds. Anything under 100% represents an arbitrage opportunity
+market_percentage <- best_h2h_odds %>% 
+  group_by(sport, id, commence_time) %>% 
+  summarise(
+  market = sum(100/converted_odds)) %>% 
+  arrange(market)
+
+#Merge market_percentage with best_h2h_odds
+best_h2h_odds <- merge(market_percentage, best_h2h_odds, by = c("sport", "id", "commence_time")) %>% 
+  arrange(market)
+
+#Filter so that only matches starting sometime in the future are shown (removes live matches)
+best_h2h_odds <- best_h2h_odds %>% filter(commence_time > now(tzone = "zulu"))
+
+#Convert to commence_time to AEST
+best_h2h_odds$commence_time <- best_h2h_odds$commence_time + hours(10)
+
+#Showcase the best markets, arranged from lowest market % to highest. 
+datatable(best_h2h_odds, options = list(scrollX = TRUE))
+```
+
+You can also find different arbitrage opportunities with a standard back bet, and a lay bet on Betfair 
+
+```{r}
+best_back_lay_odds <- sports_odds %>% 
+  
+  #Add commission variable, which is a % of the profit that Betfair will take from the winnings. 
+  #From what I've observed, Betfair takes 10% from NRL matches and 5% from all other sporting events
+  mutate(commission = ifelse(bookmaker == "Betfair", ifelse(sport == "rugbyleague_nrl", 10, 5), 0)) %>%
+  
+  #Add a converted odds variable which adjusts odds to their odds once commission is taken into account
+  mutate(converted_odds = ifelse(market_key == "h2h_lay", 
+                                 1 + (1-commission/100)/(outcomes_price-1), 
+                                 1 + (1-commission/100)*(outcomes_price-1))) %>%
+  
+  #Only keep the best back odds and best lay odds for each outcome of a unique match
+  group_by(id, outcomes_name, home_team, away_team, market_key, sport, commence_time) %>%
+  
+  #Make a note of the bookmakers that offer the best odds
+  #A lot of the time more than 1 bookmaker will offer the best possible back odds you can find. I will note a maximum of 4. 
+  filter(converted_odds == max(converted_odds)) %>% 
+  group_by(id, outcomes_name, home_team, away_team, converted_odds, market_key, sport, commence_time, outcomes_price) %>%
+  summarise(
+    bookmaker1 = sort(bookmaker)[1],
+    bookmaker2 = sort(bookmaker)[2],
+    bookmaker3 = sort(bookmaker)[3],
+    bookmaker4 = sort(bookmaker)[4]
+  ) 
+
+#Clean up the names of the bookmakers so that it is just the first word of the bookmaker
+best_back_lay_odds$bookmaker1 <- word(best_back_lay_odds$bookmaker1, start = 1, end = 1)
+best_back_lay_odds$bookmaker2 <- word(best_back_lay_odds$bookmaker2, start = 1, end = 1)
+best_back_lay_odds$bookmaker3 <- word(best_back_lay_odds$bookmaker3, start = 1, end = 1)
+best_back_lay_odds$bookmaker4 <- word(best_back_lay_odds$bookmaker4, start = 1, end = 1)
+
+#Change NA entries to "" so that the bookmaker columns can be combined
+best_back_lay_odds$bookmaker2[is.na(best_back_lay_odds$bookmaker2)] <- ""
+best_back_lay_odds$bookmaker3[is.na(best_back_lay_odds$bookmaker3)] <- ""
+best_back_lay_odds$bookmaker4[is.na(best_back_lay_odds$bookmaker4)] <- ""
+
+#Combine all bookmaker columns into a single column
+best_back_lay_odds$bookmakers <- paste(best_back_lay_odds$bookmaker1, best_back_lay_odds$bookmaker2, best_back_lay_odds$bookmaker3, best_back_lay_odds$bookmaker4)
+
+#Remove bookmaker1, bookmaker2, bookmaker3, bookmaker4 columns as they are now redundant
+best_back_lay_odds <- subset(best_back_lay_odds, select = -c(bookmaker1,bookmaker2,bookmaker3,bookmaker4))
+
+#Identify if there is a pair of back odds and lay odds for each outcome in a unique match 
+back_and_lay_pair <- best_back_lay_odds %>% group_by(id, outcomes_name) %>%
+  summarise(events = n()) #events will equal 2 if there is a pair, and 1 if there isn't a pair
+
+#Merge best_back_lay_odds with back_and_lay_pair and filter so that it only includes outcomes that have a pair of back odds and lay odds
+best_back_lay_odds <- merge(best_back_lay_odds, back_and_lay_pair, by = c("id", "outcomes_name")) %>% 
+  filter(events == 2) %>% 
+  select(-events)
+
+#Identify the market % of the best odds. Anything under 100% represents an arbitrage opportunity
+market_percentage <- best_back_lay_odds %>% 
+  group_by(sport, id, outcomes_name, commence_time) %>% 
+  summarise(
+  market = sum(100/converted_odds)) %>% 
+  arrange(market)
+
+#Merge market_percentage with best_back_lay_odds
+best_back_lay_odds <- merge(market_percentage, best_back_lay_odds, by = c("sport", "id", "outcomes_name", "commence_time")) %>% 
+  arrange(market) 
+
+#Filter so that only matches starting sometime in the future are shown (removes live matches)
+best_back_lay_odds <- best_back_lay_odds %>% filter(commence_time > now(tzone = "zulu"))
+
+#Convert to commence_time to AEST
+best_back_lay_odds$commence_time <- best_back_lay_odds$commence_time + hours(10)
+
+#Showcase the best markets, arranged from lowest market % to highest. 
+datatable(best_back_lay_odds, options = list(scrollX = TRUE))
+```

@@ -6,3 +6,8 @@ This repository contains an R Markdown document and associated files for analyzi
 - `H2H_Arbitrage_Finder.Rmd`: The R Markdown document containing the analysis code.
 - `references.bib`: BibTeX file containing citations for external resources.
 - `README.md`: This file providing an overview of the repository.
+
+# Citation
+To cite this analysis or any of the packages used, please reference the following:
+
+- Gilani, Saiem. oddsapiR: The SportsDataverse's R Package for The Odds API. (2022). https://oddsapiR.sportsdataverse.org

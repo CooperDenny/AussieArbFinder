@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 # Introduction
 
-In this analysis, we aim to identify arbitrage opportunities in head-to-head (H2H) betting markets. Arbitrage betting, also known as sure betting, involves placing bets on all possible outcomes of an event across different bookmakers to guarantee a profit regardless of the result. This is possible because different bookmakers offer different odds for the same event. Here, we'll use the oddsapiR package to fetch the latest odds data [@gilani_2022_oddsapiR] and the tidyverse package for data manipulation and analysis.
+In this analysis, we aim to identify arbitrage opportunities in head-to-head (H2H) betting markets. Arbitrage betting, also known as sure betting, involves placing bets on all possible outcomes of an event across different bookmakers to guarantee a profit regardless of the result. This is possible because different bookmakers offer different odds for the same event. Here, we'll use the oddsapiR package to fetch the latest odds data [@gilani_2022_oddsapiR] as well as the tidyverse, stringr and DT packages for data manipulation and analysis.
 
 # Loading Required Packages
 
@@ -252,6 +252,6 @@ datatable(best_back_lay_odds, options = list(scrollX = TRUE))
 
 # Conclusion
 
-In this analysis, we have successfully identified potential arbitrage opportunities in H2H betting markets by using the oddsapiR and tidyverse packages in R. We have demonstrated how to fetch the latest odds data, filter and manipulate the data to find the best odds, and calculate arbitrage percentages. By following this approach, bettors can potentially guarantee a profit regardless of the outcome of an event by taking advantage of different odds offered by various bookmakers. This methodology can be further extended and refined to enhance the accuracy and efficiency of identifying profitable arbitrage opportunities.
+In this analysis, we have successfully identified potential arbitrage opportunities in H2H betting markets by using the oddsapiR, tidyverse, stringr and DT packages in R. We have demonstrated how to fetch the latest odds data, filter and manipulate the data to find the best odds, and calculate arbitrage percentages. By following this approach, bettors can potentially guarantee a profit regardless of the outcome of an event by taking advantage of different odds offered by various bookmakers. This methodology can be further extended and refined to enhance the accuracy and efficiency of identifying profitable arbitrage opportunities.
 
 # References 

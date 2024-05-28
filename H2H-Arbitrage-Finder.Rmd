@@ -30,7 +30,7 @@ To access the odds data, you'll need an API key from the Odds API. You can obtai
 
 ```{r}
 #Sys.setenv(ODDS_API_KEY = "XXXX-YOUR-API-KEY-HERE-XXXX")
-Sys.setenv(ODDS_API_KEY = "9761f74dc824a7c66f9a3f45f1c308b6")
+Sys.setenv(ODDS_API_KEY = "e72683f0bc129be07d98e368a0afb172")
 ```
 
 # Checking API Requests
@@ -58,6 +58,21 @@ datatable(active_sports, options = list(scrollX = TRUE))
 # Extracting Head-to-Head Odds
 
 Next, we will extract head-to-head odds for all active markets in Australia. We'll create a dataframe to store all sports odds and loop through each sport to fetch the odds data.
+
+Odds will be scraped from the following Australian bookmakers:
+
+* Betfair
+* Betr
+* BlueBet
+* Ladbrokes
+* Neds
+* PlayUp
+* PointsBet
+* SportsBet
+* TAB
+* TABtouch
+* TopSport
+* Unibet
 
 ```{r}
 #Create an initial dataframe where we will store all sports odds
@@ -127,8 +142,8 @@ best_h2h_odds <- sports_odds %>%
   group_by(id, outcomes_name, home_team, away_team, sport) %>%
   filter(converted_odds == max(converted_odds)) %>% 
   
-  #Make a note of the bookmakers that offer the best odds
-  #A lot of the time more than 1 bookmaker will offer the best possible odds you can find. I will note a maximum of 4. 
+  #Make a note of the bookmakers that offer the best odds. I will note a maximum of 4
+  #A lot of the time more than 1 bookmaker will offer the best possible odds you can find
   group_by(id, outcomes_name, home_team, away_team, converted_odds, sport, commence_time) %>%
   summarise(
     bookmaker1 = sort(bookmaker)[1],
@@ -194,8 +209,8 @@ best_back_lay_odds <- sports_odds %>%
   #Only keep the best back odds and best lay odds for each outcome of a unique match
   group_by(id, outcomes_name, home_team, away_team, market_key, sport, commence_time) %>%
   
-  #Make a note of the bookmakers that offer the best odds
-  #A lot of the time more than 1 bookmaker will offer the best possible back odds you can find. I will note a maximum of 4. 
+  #Make a note of the bookmakers that offer the best odds. I will note a maximum of 4
+  #A lot of the time more than 1 bookmaker will offer the best possible back odds you can find. 
   filter(converted_odds == max(converted_odds)) %>% 
   group_by(id, outcomes_name, home_team, away_team, converted_odds, market_key, sport, commence_time, outcomes_price) %>%
   summarise(
@@ -252,6 +267,6 @@ datatable(best_back_lay_odds, options = list(scrollX = TRUE))
 
 # Conclusion
 
-In this analysis, we have successfully identified potential arbitrage opportunities in H2H betting markets by using the oddsapiR, tidyverse, stringr and DT packages in R. We have demonstrated how to fetch the latest odds data, filter and manipulate the data to find the best odds, and calculate arbitrage percentages. By following this approach, bettors can potentially guarantee a profit regardless of the outcome of an event by taking advantage of different odds offered by various bookmakers. This methodology can be further extended and refined to enhance the accuracy and efficiency of identifying profitable arbitrage opportunities.
+In this analysis, we have successfully identified potential arbitrage opportunities in H2H betting markets by using the oddsapiR, tidyverse, stringr and DT packages in R. We have demonstrated how to fetch the latest odds data, filter and manipulate the data to find the best odds, and calculate arbitrage percentages. By following this approach, betters can potentially guarantee a profit regardless of the outcome of an event by taking advantage of different odds offered by various bookmakers. This methodology can be further extended and refined to enhance the accuracy and efficiency of identifying profitable arbitrage opportunities.
 
 # References 

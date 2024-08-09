@@ -2,12 +2,14 @@
 title: "H2H-Arbitrage-Finder"
 author: "Cooper Denny"
 output: html_document
+classoption: landscape
 bibliography: references.bib
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
+* Updated as of `r Sys.Date()`
 
 # Introduction
 
@@ -22,6 +24,8 @@ library(oddsapiR)
 library(tidyverse)
 library(stringr)
 library(DT)
+library(knitr)
+library(kableExtra)
 ```
 
 # Setting Up API Access
@@ -30,7 +34,7 @@ To access the odds data, you'll need an API key from the Odds API. You can obtai
 
 ```{r}
 #Sys.setenv(ODDS_API_KEY = "XXXX-YOUR-API-KEY-HERE-XXXX")
-Sys.setenv(ODDS_API_KEY = "e72683f0bc129be07d98e368a0afb172")
+Sys.setenv(ODDS_API_KEY = "27e7870c95b4633d21404d4bff34b320")
 ```
 
 # Checking API Requests
@@ -38,7 +42,7 @@ Sys.setenv(ODDS_API_KEY = "e72683f0bc129be07d98e368a0afb172")
 The following command will tell you how many requests you have remaining and how many requests you have used so far this month:
 
 ```{r}
-toa_requests()
+datatable(toa_requests())
 ```
 # Fetching Active Sports
 
@@ -46,13 +50,13 @@ Now, let's check which sports currently have active markets (not including outri
 
 ```{r}
 active_sports <- toa_sports() %>% 
-  filter(active == TRUE, has_outrights == FALSE)
+  filter(active == TRUE, has_outrights == FALSE) %>% select(key, title, active, has_outrights)
 ```
 
 Here is a table of the active sports currently available:
 
 ```{r}
-datatable(active_sports, options = list(scrollX = TRUE))
+datatable(active_sports, options = list(scrollX = TRUE, pageLength = 5))
 ```
 
 # Extracting Head-to-Head Odds
@@ -110,12 +114,6 @@ sports_odds <- sports_odds %>% filter(commence_time > now(tzone = "zulu"))
 sports_odds$commence_time <- sports_odds$commence_time + hours(10)
 ```
 
-Here are the first few rows of the collected sports odds data:
-
-```{r}
-datatable(sports_odds, options = list(scrollX = TRUE))
-```
-
 # Identifying Head-to-Head Arbitrage Opportunities
 
 To identify head-to-head arbitrage opportunities, we will filter out lay bets, account for commissions, and only keep the best odds for each outcome of a unique match. We will also note the bookmakers offering the best odds.
@@ -152,19 +150,16 @@ best_h2h_odds <- sports_odds %>%
     bookmaker4 = sort(bookmaker)[4]
   ) 
 
-#Clean up the names of the bookmakers so that it is just the first word of the bookmaker
-best_h2h_odds$bookmaker1 <- word(best_h2h_odds$bookmaker1, start = 1, end = 1)
-best_h2h_odds$bookmaker2 <- word(best_h2h_odds$bookmaker2, start = 1, end = 1)
-best_h2h_odds$bookmaker3 <- word(best_h2h_odds$bookmaker3, start = 1, end = 1)
-best_h2h_odds$bookmaker4 <- word(best_h2h_odds$bookmaker4, start = 1, end = 1)
-
 #Change NA entries to "" so that the bookmaker columns can be combined
 best_h2h_odds$bookmaker2[is.na(best_h2h_odds$bookmaker2)] <- ""
 best_h2h_odds$bookmaker3[is.na(best_h2h_odds$bookmaker3)] <- ""
 best_h2h_odds$bookmaker4[is.na(best_h2h_odds$bookmaker4)] <- ""
 
 #Combine all bookmaker columns into a single column
-best_h2h_odds$bookmakers <- paste(best_h2h_odds$bookmaker1, best_h2h_odds$bookmaker2, best_h2h_odds$bookmaker3, best_h2h_odds$bookmaker4)
+best_h2h_odds$bookmakers <- paste(best_h2h_odds$bookmaker1, 
+                                  best_h2h_odds$bookmaker2, 
+                                  best_h2h_odds$bookmaker3, 
+                                  best_h2h_odds$bookmaker4)
 
 #Remove bookmaker1, bookmaker2, bookmaker3, bookmaker4 columns as they are now redundant
 best_h2h_odds <- subset(best_h2h_odds, select = -c(bookmaker1,bookmaker2,bookmaker3,bookmaker4))
@@ -177,15 +172,18 @@ market_percentage <- best_h2h_odds %>%
   arrange(market)
 
 #Merge market_percentage with best_h2h_odds
-best_h2h_odds <- merge(market_percentage, best_h2h_odds, by = c("sport", "id", "commence_time")) %>% 
-  arrange(market)
+best_h2h_odds <- merge(market_percentage, 
+                       best_h2h_odds, 
+                       by = c("sport", "id", "commence_time")) %>% 
+  arrange(market) %>% 
+  select(-id)
 ```
 
 The resulting table will show us the matches with potential arbitrage opportunities, including the best odds for each outcome, the bookmakers offering these odds, and the calculated arbitrage percentage.
 
 ```{r}
-#Showcase the best markets, arranged from lowest market % to highest. 
-datatable(best_h2h_odds, options = list(scrollX = TRUE))
+#Showcase the best markets, arranged from lowest market % to highest.
+datatable(best_h2h_odds, options = list(scrollX = TRUE, pageLength = 10))
 ```
 
 # Identifying Back and Lay Arbitrage Opportunities
@@ -220,19 +218,16 @@ best_back_lay_odds <- sports_odds %>%
     bookmaker4 = sort(bookmaker)[4]
   ) 
 
-#Clean up the names of the bookmakers so that it is just the first word of the bookmaker
-best_back_lay_odds$bookmaker1 <- word(best_back_lay_odds$bookmaker1, start = 1, end = 1)
-best_back_lay_odds$bookmaker2 <- word(best_back_lay_odds$bookmaker2, start = 1, end = 1)
-best_back_lay_odds$bookmaker3 <- word(best_back_lay_odds$bookmaker3, start = 1, end = 1)
-best_back_lay_odds$bookmaker4 <- word(best_back_lay_odds$bookmaker4, start = 1, end = 1)
-
 #Change NA entries to "" so that the bookmaker columns can be combined
 best_back_lay_odds$bookmaker2[is.na(best_back_lay_odds$bookmaker2)] <- ""
 best_back_lay_odds$bookmaker3[is.na(best_back_lay_odds$bookmaker3)] <- ""
 best_back_lay_odds$bookmaker4[is.na(best_back_lay_odds$bookmaker4)] <- ""
 
 #Combine all bookmaker columns into a single column
-best_back_lay_odds$bookmakers <- paste(best_back_lay_odds$bookmaker1, best_back_lay_odds$bookmaker2, best_back_lay_odds$bookmaker3, best_back_lay_odds$bookmaker4)
+best_back_lay_odds$bookmakers <- paste(best_back_lay_odds$bookmaker1, 
+                                       best_back_lay_odds$bookmaker2, 
+                                       best_back_lay_odds$bookmaker3, 
+                                       best_back_lay_odds$bookmaker4)
 
 #Remove bookmaker1, bookmaker2, bookmaker3, bookmaker4 columns as they are now redundant
 best_back_lay_odds <- subset(best_back_lay_odds, select = -c(bookmaker1,bookmaker2,bookmaker3,bookmaker4))
@@ -241,8 +236,9 @@ best_back_lay_odds <- subset(best_back_lay_odds, select = -c(bookmaker1,bookmake
 back_and_lay_pair <- best_back_lay_odds %>% group_by(id, outcomes_name) %>%
   summarise(events = n()) #events will equal 2 if there is a pair, and 1 if there isn't a pair
 
-#Merge best_back_lay_odds with back_and_lay_pair and filter so that it only includes outcomes that have a pair of back odds and lay odds
+#Merge best_back_lay_odds with back_and_lay_pair 
 best_back_lay_odds <- merge(best_back_lay_odds, back_and_lay_pair, by = c("id", "outcomes_name")) %>% 
+  #And filter so that it only includes outcomes that have a pair of back odds and lay odds
   filter(events == 2) %>% 
   select(-events)
 
@@ -254,19 +250,23 @@ market_percentage <- best_back_lay_odds %>%
   arrange(market)
 
 #Merge market_percentage with best_back_lay_odds
-best_back_lay_odds <- merge(market_percentage, best_back_lay_odds, by = c("sport", "id", "outcomes_name", "commence_time")) %>% 
-  arrange(market) 
+best_back_lay_odds <- merge(market_percentage, 
+                            best_back_lay_odds, 
+                            by = c("sport", "id", "outcomes_name", "commence_time")) %>% 
+  arrange(market) %>% 
+  filter(!sport %in% c("icehockey_sweden_hockey_league", "icehockey_nhl")) %>%
+  select(-id)
 ```
 
 The resulting table will show us the matches with potential arbitrage opportunities, including the best odds for each outcome, the bookmakers offering these odds, and the calculated arbitrage percentage.
 
 ```{r}
-#Showcase the best markets, arranged from lowest market % to highest. 
-datatable(best_back_lay_odds, options = list(scrollX = TRUE))
+#Showcase the best markets, arranged from lowest market % to highest.
+datatable(best_back_lay_odds, options = list(scrollX = TRUE, pageLength = 10))
 ```
 
 # Conclusion
 
-In this analysis, we have successfully identified potential arbitrage opportunities in H2H betting markets by using the oddsapiR, tidyverse, stringr and DT packages in R. We have demonstrated how to fetch the latest odds data, filter and manipulate the data to find the best odds, and calculate arbitrage percentages. By following this approach, betters can potentially guarantee a profit regardless of the outcome of an event by taking advantage of different odds offered by various bookmakers. This methodology can be further extended and refined to enhance the accuracy and efficiency of identifying profitable arbitrage opportunities.
+In this analysis, we have successfully identified potential arbitrage opportunities in H2H betting markets by using the `oddsapiR`, `tidyverse`, `stringr` and `DT` packages in R. We have demonstrated how to fetch the latest odds data, filter and manipulate the data to find the best odds, and calculate arbitrage percentages. By following this approach, betters can potentially guarantee a profit regardless of the outcome of an event by taking advantage of different odds offered by various bookmakers. This methodology can be further extended and refined to enhance the accuracy and efficiency of identifying profitable arbitrage opportunities.
 
 # References 

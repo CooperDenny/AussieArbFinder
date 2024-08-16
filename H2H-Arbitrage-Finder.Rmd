@@ -67,6 +67,7 @@ Odds will be scraped from the following Australian bookmakers:
 
 * Betfair
 * Betr
+* BetRight
 * BlueBet
 * Ladbrokes
 * Neds

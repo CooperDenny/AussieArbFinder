@@ -32,9 +32,20 @@ library(kableExtra)
 
 To access the odds data, you'll need an API key from the Odds API. You can obtain a unique API key by visiting the-odds-api.com.
 
+Set your key in your `.Renviron` file (run `usethis::edit_r_environ()`) by adding a line:
+
+```
+ODDS_API_KEY=your_key_here
+```
+
+Then restart R. The key will be loaded automatically below.
+
 ```{r}
-#Sys.setenv(ODDS_API_KEY = "XXXX-YOUR-API-KEY-HERE-XXXX")
-Sys.setenv(ODDS_API_KEY = "27e7870c95b4633d21404d4bff34b320")
+# Load API key from environment variable (set in .Renviron — never commit your key)
+# To set: run usethis::edit_r_environ() and add: ODDS_API_KEY=your_key_here
+if (Sys.getenv("ODDS_API_KEY") == "") {
+  stop("ODDS_API_KEY environment variable is not set. See the 'Setting Up API Access' section above.")
+}
 ```
 
 # Checking API Requests

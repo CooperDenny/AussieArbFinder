@@ -72,23 +72,7 @@ datatable(active_sports, options = list(scrollX = TRUE, pageLength = 5))
 
 # Extracting Head-to-Head Odds
 
-Next, we will extract head-to-head odds for all active markets in Australia. We'll create a dataframe to store all sports odds and loop through each sport to fetch the odds data.
-
-Odds will be scraped from the following Australian bookmakers:
-
-* Betfair
-* Betr
-* BetRight
-* BlueBet
-* Ladbrokes
-* Neds
-* PlayUp
-* PointsBet
-* SportsBet
-* TAB
-* TABtouch
-* TopSport
-* Unibet
+Next, we will extract head-to-head odds for all active markets in Australia. We'll create a dataframe to store all sports odds and loop through each sport to fetch the odds data. The Odds API decides which Australian bookmakers are covered (its `au` region); the list actually returned is printed below the fetch.
 
 ```{r}
 #Create an initial dataframe where we will store all sports odds
@@ -116,15 +100,23 @@ if(length(sports_odds_i) > 1){
 }
 }
 
-#Change the event commence time to a datetime index
+#Stop here if no sport currently has an Australian H2H market
+if (nrow(sports_odds) == 0) {
+  knitr::knit_exit("No Australian head-to-head markets are open right now, so there is nothing to compare.")
+}
+
+#Change the event commence time to a datetime (the API returns UTC)
 sports_odds$commence_time <- as_datetime(sports_odds$commence_time)
 
 #Filter so that only matches starting sometime in the future are shown (removes live matches)
-sports_odds <- sports_odds %>% filter(commence_time > now(tzone = "zulu"))
+sports_odds <- sports_odds %>% filter(commence_time > now(tzone = "UTC"))
 
-#Convert to commence_time to AEST
-sports_odds$commence_time <- sports_odds$commence_time + hours(10)
+#Show start times in Melbourne time. with_tz() applies daylight saving (AEDT, UTC+11)
+#from October to April, which a fixed +10 hours would get wrong by an hour.
+melbourne_time <- function(x) format(with_tz(x, "Australia/Melbourne"), "%a %d %b %Y %H:%M %Z")
 ```
+
+Odds were returned by `r n_distinct(sports_odds$bookmaker)` bookmakers: `r paste(sort(unique(sports_odds$bookmaker)), collapse = ", ")`.
 
 # Identifying Head-to-Head Arbitrage Opportunities
 
@@ -187,11 +179,18 @@ market_percentage <- best_h2h_odds %>%
 best_h2h_odds <- merge(market_percentage, 
                        best_h2h_odds, 
                        by = c("sport", "id", "commence_time")) %>% 
+  #How to split a $100 outlay across the outcomes so every result returns the same amount.
+  #Each stake is proportional to 1/odds; when market < 100 that return exceeds $100.
+  mutate(
+    stake_per_100  = round(100 * (100 / converted_odds) / market, 2),
+    return_per_100 = round(100 * 100 / market, 2),
+    commence_time  = melbourne_time(commence_time)
+  ) %>%
   arrange(market) %>% 
   select(-id)
 ```
 
-The resulting table will show us the matches with potential arbitrage opportunities, including the best odds for each outcome, the bookmakers offering these odds, and the calculated arbitrage percentage.
+The resulting table will show us the matches with potential arbitrage opportunities, including the best odds for each outcome, the bookmakers offering these odds, and the calculated arbitrage percentage. `stake_per_100` is how much of a $100 outlay to place on each outcome so that every result returns `return_per_100`; anything above $100 is the locked-in profit. Odds move quickly, so confirm every price before placing a bet.
 
 ```{r}
 #Showcase the best markets, arranged from lowest market % to highest.
@@ -200,9 +199,9 @@ datatable(best_h2h_odds, options = list(scrollX = TRUE, pageLength = 10))
 
 # Identifying Back and Lay Arbitrage Opportunities
 
-You can also find different arbitrage opportunities with a standard back bet, and a lay bet on Betfair 
+You can also find different arbitrage opportunities with a standard back bet, and a lay bet on Betfair.
 
-Similar to how we identified arbitrage opportunities for To identify arbitrage opportunities with standard back and lay bets, we will account for commissions and convert the odds accordingly. We'll then keep the best odds for each outcome of a unique match and note the bookmakers offering these odds. Finally, we'll calculate the market percentage for each match. Arbitrage opportunities arise when the sum of the inverse of the best odds for all possible outcomes is less than 1 (or 100%).
+To identify arbitrage opportunities with standard back and lay bets, we will account for commissions and convert the odds accordingly. We'll then keep the best odds for each outcome of a unique match and note the bookmakers offering these odds. Finally, we'll calculate the market percentage for each match. Arbitrage opportunities arise when the sum of the inverse of the best odds for all possible outcomes is less than 1 (or 100%).
 
 ```{r}
 best_back_lay_odds <- sports_odds %>% 
@@ -267,6 +266,7 @@ best_back_lay_odds <- merge(market_percentage,
                             by = c("sport", "id", "outcomes_name", "commence_time")) %>% 
   arrange(market) %>% 
   filter(!sport %in% c("icehockey_sweden_hockey_league", "icehockey_nhl")) %>%
+  mutate(commence_time = melbourne_time(commence_time)) %>%
   select(-id)
 ```
 
